@@ -19,7 +19,7 @@ const getData = (excelFilePath, sheetName, firstRow) => {
   return json;
 };
 
-const jsonResult = getData("assets/Data.xlsx", "Suivi Conso New", 2);
+const jsonResult = getData("assets/InputData.xlsx", "Suivi Conso New", 2);
 // console.log(jsonResult);
 
 let previousDate = "";
