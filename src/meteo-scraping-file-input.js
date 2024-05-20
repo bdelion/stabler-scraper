@@ -17,7 +17,7 @@ const getData = (excelFilePath, sheetName, firstRow) => {
   const json = XLSX.utils.sheet_to_json(ws, {
     blankRows: false,
     range: firstRow,
-    raw: false,
+    raw: false
   });
   return json;
 };
@@ -40,12 +40,29 @@ const formatData = (jsonArray) => {
   return dateArray;
 };
 
-async function performScraping(idCommune, date) {
+async function performIdStationScraping(stationName) {
+  let url = `https://www.meteociel.fr/temps-reel/lieuhelper.php?mode=findstation&str=${stationName}`;
+
+  // downloading the target web page by performing an HTTP GET request in Axios
+  const axiosResponse = await axios.request({
+    method: "POST",
+    url: url,
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
+    },
+  });
+
+  // Return the Weather Station Id bu Parsing the response, format : 7156|Paris-Montsouris (75)|0|75|0|1716185221
+  return axiosResponse.data.substring(0, axiosResponse.data.indexOf("|"));
+}
+
+async function performWeatherObservationsScraping(stationId, date) {
   const momentDate = moment(date, "DD/MM/YY hh:mm");
   let day = momentDate.date();
   let month = momentDate.month();
   let year = momentDate.year();
-  let url = `https://www.meteociel.fr/temps-reel/obs_villes.php?code2=${idCommune}&jour2=${day}&mois2=${month}&annee2=${year}&affint=1`;
+  let url = `https://www.meteociel.fr/temps-reel/obs_villes.php?code2=${stationId}&jour2=${day}&mois2=${month}&annee2=${year}&affint=1`;
 
   // downloading the target web page by performing an HTTP GET request in Axios
   const axiosResponse = await axios.request({
@@ -85,7 +102,7 @@ async function performScraping(idCommune, date) {
         });
 
       if (!(dataLine[0] === "Heurelocale")) {
-        rowData["idCommune"] = idCommune;
+        rowData["stationId"] = stationId;
         rowData["jour"] = momentDate.format("DD/MM/YYYY");
         rowData["heure"] = dataLine[0].replace("h", ":");
         rowData["moment"] = moment(
@@ -106,7 +123,7 @@ async function performScraping(idCommune, date) {
   return dataWeather;
 }
 
-async function getWeatherDataBetween2Dates(idCommune, startDate, endDate) {
+async function getWeatherDataBetween2Dates(stationId, startDate, endDate) {
   // initializing the data structures that will contain all scraped data
   let datasWeather = [];
   const dateStart = moment(startDate, "DD/MM/YYYY hh:mm");
@@ -116,7 +133,7 @@ async function getWeatherDataBetween2Dates(idCommune, startDate, endDate) {
   let dateIteration = dateStart.clone();
   while (dateIteration < dateEndIteration) {
     datasWeather = datasWeather.concat(
-      await performScraping(idCommune, dateIteration)
+      await performWeatherObservationsScraping(stationId, dateIteration)
     );
     dateIteration.add(1, "days");
   }
@@ -137,12 +154,13 @@ async function getWeatherDataBetween2Dates(idCommune, startDate, endDate) {
   filteredDatasWeather.sort((a, b) => a.temperature - b.temperature);
   // Initialize an empty object to store the row data
   const rowData = {};
-  rowData["idCommune"] = idCommune;
+  rowData["stationId"] = stationId;
   rowData["date"] = endDate;
+  // TODO ? rowData["date"] = dateEnd;
   rowData["moment"] = dateEnd;
-  rowData["temperatureMin"] = filteredDatasWeather[0].temperature;
+  rowData["temperatureMin"] = filteredDatasWeather[0].temperature.replace('.', ',');
   rowData["temperatureMax"] =
-    filteredDatasWeather[filteredDatasWeather.length - 1].temperature;
+    filteredDatasWeather[filteredDatasWeather.length - 1].temperature.replace('.', ',');
   return rowData;
 }
 
@@ -150,29 +168,23 @@ async function getWeatherDataBetween2Dates(idCommune, startDate, endDate) {
 let weatherDatas = [];
 
 async function main() {
-  const jsonResult = getData("assets/InputData.xlsx", "Suivi Conso New", 2);
-  const inputDatas = formatData(jsonResult);
-  console.log(inputDatas);
+  let stationId = await performIdStationScraping("Bressuire");
+  console.log("stationId: " + stationId);
 
-  let previousValue = "";
+  const jsonResult = getData("assets/InputData.xlsx", "Suivi Conso New", 2);
+  console.log(jsonResult);
+  const inputDatas = formatData(jsonResult);
 
   for (const currentValue of inputDatas) {
-    console.log(currentValue);
+    // console.log("currentValue:");
+    // console.log(currentValue);
     weatherDatas.push(
       await getWeatherDataBetween2Dates(
-        79049004,
+        stationId,
         currentValue.begin,
         currentValue.end
       )
     );
-
-    // if (!(previousValue.trim().length === 0)) {
-    //   console.log(previousValue + " --> " + currentValue);
-    //   weatherDatas.push(
-    //     await getWeatherDataBetween2Dates(79049004, previousValue, currentValue)
-    //   );
-    // }
-    // previousValue = currentValue;
   }
 
   // Sort data by date
@@ -184,6 +196,7 @@ async function main() {
 main()
   .then((result) => {
     console.log(result);
+    // TODO ? const worksheet = XLSX.utils.json_to_sheet(result, { origin: -1, display: true, cellDates: true, dateNF: 'dd/mm/yyyy hh:mm:ss' });
     const worksheet = XLSX.utils.json_to_sheet(result);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Temperatures");
