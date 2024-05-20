@@ -14,11 +14,16 @@ const getData = (excelFilePath, sheetName, firstRow) => {
   // Select sheet
   const ws = wb.Sheets[sheetName];
   // Read data in string format, begin at a specific raw
-  const json = XLSX.utils.sheet_to_json(ws, {
-    blankRows: false,
-    range: firstRow,
-    raw: false,
-  });
+  // const json = XLSX.utils.sheet_to_json(ws, {
+  //   blankRows: false,
+  //   range: firstRow,
+  //   raw: false,
+  //   dateNF: "DD/MM/YYYY HH:mm:ss",
+  //   cellNF: false,
+  //   cellText: false,
+  //   type: 'binary'
+  // });
+  const json = XLSX.utils.sheet_to_json(ws, { range: firstRow, raw: false });
   return json;
 };
 
@@ -41,7 +46,7 @@ const formatData = (jsonArray) => {
 };
 
 async function performScraping(idCommune, date) {
-  const momentDate = moment(date, "DD/MM/YY hh:mm");
+  const momentDate = moment(date, "DD/MM/YYYY HH:mm:ss");
   let day = momentDate.date();
   let month = momentDate.month();
   let year = momentDate.year();
@@ -90,7 +95,7 @@ async function performScraping(idCommune, date) {
         rowData["heure"] = dataLine[0].replace("h", ":");
         rowData["moment"] = moment(
           rowData["jour"] + " " + rowData["heure"],
-          "DD/MM/YYYY hh:mm"
+          "DD/MM/YYYY HH:mm:ss"
         );
         rowData["temperature"] = dataLine[2].substring(
           0,
@@ -109,8 +114,9 @@ async function performScraping(idCommune, date) {
 async function getWeatherDataBetween2Dates(idCommune, startDate, endDate) {
   // initializing the data structures that will contain all scraped data
   let datasWeather = [];
-  const dateStart = moment(startDate, "DD/MM/YYYY hh:mm");
-  const dateEnd = moment(endDate, "DD/MM/YYYY hh:mm");
+  const dateStart = moment(startDate, "DD/MM/YYYY HH:mm:ss");
+  // const dateEnd = moment(endDate, "DD/MM/YYYY HH:mm:ss");
+  const dateEnd = moment(endDate, "DD/MM/YYYY HH:mm");
   const dateEndIteration = dateEnd.clone().add(1, "days");
 
   let dateIteration = dateStart.clone();
@@ -138,8 +144,15 @@ async function getWeatherDataBetween2Dates(idCommune, startDate, endDate) {
   // Initialize an empty object to store the row data
   const rowData = {};
   rowData["idCommune"] = idCommune;
-  rowData["date"] = endDate;
-  rowData["moment"] = dateEnd;
+  console.log("endDate: " + endDate);
+  console.log("dateEnd.format('DD/MM/YYYY HH:mm:ss'): " + dateEnd.format('DD/MM/YYYY HH:mm:ss'));
+  console.log("dateEnd.toString(): " + dateEnd.toString());
+  console.log("dateEnd: " + dateEnd);
+  console.log("dateEnd.toDate(): " + dateEnd.toDate());
+  console.log("dateEnd.toDate().toString(): " + dateEnd.toDate().toString());
+  rowData["date"] = dateEnd.format('DD/MM/YYYY HH:mm:ss');
+  rowData["moment"] = dateEnd.toDate();
+  // rowData["moment"] = new Date(endDate, "DD/MM/YYYY hh:mm:ss").toString();
   rowData["temperatureMin"] = filteredDatasWeather[0].temperature;
   rowData["temperatureMax"] =
     filteredDatasWeather[filteredDatasWeather.length - 1].temperature;
@@ -151,13 +164,16 @@ let weatherDatas = [];
 
 async function main() {
   const jsonResult = getData("assets/InputData.xlsx", "Suivi Conso New", 2);
+  console.log("=-= getData -> jsonResult =-=");
+  console.log(jsonResult);
   const inputDatas = formatData(jsonResult);
+  console.log("=-= formatData -> inputDatas =-=");
   console.log(inputDatas);
 
   let previousValue = "";
 
   for (const currentValue of inputDatas) {
-    console.log(currentValue);
+    // console.log(currentValue);
     weatherDatas.push(
       await getWeatherDataBetween2Dates(
         79049004,
@@ -183,8 +199,13 @@ async function main() {
 
 main()
   .then((result) => {
+    console.log("=-= main -> result =-=");
     console.log(result);
-    const worksheet = XLSX.utils.json_to_sheet(result);
+    const worksheet = XLSX.utils.json_to_sheet(result, {
+      cellDates: true,
+      dateNF: "DD/MM/YYYY HH:mm:ss",
+    });
+    // const worksheet = XLSX.utils.json_to_sheet(result);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Temperatures");
     XLSX.writeFile(workbook, "assets/OutputData.xlsx", { compression: true });
