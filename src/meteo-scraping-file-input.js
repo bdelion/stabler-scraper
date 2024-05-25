@@ -8,6 +8,15 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 const moment = require("moment");
 
+function getCorrectedDate(date) {
+  var mins =
+    (new Date("Dec 31, 1900 00:00:00").getTime() -
+      new Date("Dec 31, 1900 00:00:00 GMT+00:00").getTime()) /
+    60000;
+  var TimeCorrect = Number((60 * (mins - Number(mins.toFixed(0)))).toFixed(0));
+  return new Date(date.getTime() + TimeCorrect * 1000);
+}
+
 const getData = (excelFilePath, sheetName, firstRow) => {
   // Reading our test file
   const wb = XLSX.readFile(excelFilePath);
@@ -116,7 +125,7 @@ async function getWeatherDataBetween2Dates(idCommune, startDate, endDate) {
   let datasWeather = [];
   const dateStart = moment(startDate, "DD/MM/YYYY HH:mm:ss");
   // const dateEnd = moment(endDate, "DD/MM/YYYY HH:mm:ss");
-  const dateEnd = moment(endDate, "DD/MM/YYYY HH:mm");
+  const dateEnd = moment(endDate, "DD/MM/YYYY HH:mm:ss");
   const dateEndIteration = dateEnd.clone().add(1, "days");
 
   let dateIteration = dateStart.clone();
@@ -145,14 +154,17 @@ async function getWeatherDataBetween2Dates(idCommune, startDate, endDate) {
   const rowData = {};
   rowData["idCommune"] = idCommune;
   console.log("endDate: " + endDate);
-  console.log("dateEnd.format('DD/MM/YYYY HH:mm:ss'): " + dateEnd.format('DD/MM/YYYY HH:mm:ss'));
+  console.log(
+    "dateEnd.format('DD/MM/YYYY HH:mm:ss'): " +
+      dateEnd.format("DD/MM/YYYY HH:mm:ss")
+  );
   console.log("dateEnd.toString(): " + dateEnd.toString());
   console.log("dateEnd: " + dateEnd);
   console.log("dateEnd.toDate(): " + dateEnd.toDate());
   console.log("dateEnd.toDate().toString(): " + dateEnd.toDate().toString());
-  rowData["date"] = dateEnd.format('DD/MM/YYYY HH:mm:ss');
-  rowData["moment"] = dateEnd.toDate();
-  // rowData["moment"] = new Date(endDate, "DD/MM/YYYY hh:mm:ss").toString();
+  rowData["date"] = dateEnd.format("DD/MM/YYYY HH:mm:ss");
+  rowData["moment"] = getCorrectedDate(dateEnd.toDate());
+  // rowData["moment"] = new Date(endDate, "DD/MM/YYYY HH:mm:ss").toString();
   rowData["temperatureMin"] = filteredDatasWeather[0].temperature;
   rowData["temperatureMax"] =
     filteredDatasWeather[filteredDatasWeather.length - 1].temperature;
@@ -174,13 +186,15 @@ async function main() {
 
   for (const currentValue of inputDatas) {
     // console.log(currentValue);
-    weatherDatas.push(
-      await getWeatherDataBetween2Dates(
-        79049004,
-        currentValue.begin,
-        currentValue.end
-      )
-    );
+    if (currentValue.begin !== currentValue.end) {
+      weatherDatas.push(
+        await getWeatherDataBetween2Dates(
+          79049004,
+          currentValue.begin,
+          currentValue.end
+        )
+      );
+    }
 
     // if (!(previousValue.trim().length === 0)) {
     //   console.log(previousValue + " --> " + currentValue);
@@ -211,3 +225,13 @@ main()
     XLSX.writeFile(workbook, "assets/OutputData.xlsx", { compression: true });
   })
   .catch((err) => console.error(err));
+
+
+  // A voir
+  // https://stackoverflow.com/questions/77553369/how-to-change-local-settings-separate-numbers-with-a-comma-when-saving-in-excel
+  // https://docs.sheetjs.com/docs/csf/features/nf
+  // https://jsfiddle.net/w2amk8dc/1/
+  // https://github.com/SheetJS/sheetjs/issues/1975
+  // https://stackoverflow.com/questions/48535736/sheetjs-how-to-format-column
+  // https://stackoverflow.com/questions/55865604/wrong-data-format-in-exported-excel
+  // https://github.com/SheetJS/sheetjs/issues/1339
