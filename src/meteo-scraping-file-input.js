@@ -165,9 +165,9 @@ async function getWeatherDataBetween2Dates(idCommune, startDate, endDate) {
   rowData["date"] = dateEnd.format("DD/MM/YYYY HH:mm:ss");
   rowData["moment"] = getCorrectedDate(dateEnd.toDate());
   // rowData["moment"] = new Date(endDate, "DD/MM/YYYY HH:mm:ss").toString();
-  rowData["temperatureMin"] = filteredDatasWeather[0].temperature;
+  rowData["temperatureMin"] = filteredDatasWeather[0].temperature.replace(".", ",");
   rowData["temperatureMax"] =
-    filteredDatasWeather[filteredDatasWeather.length - 1].temperature;
+    filteredDatasWeather[filteredDatasWeather.length - 1].temperature.replace(".", ",");
   return rowData;
 }
 
